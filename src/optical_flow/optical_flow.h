@@ -5,13 +5,13 @@
 #ifndef PITCHANGLECORRECTION_OPTICAL_FLOW_H
 #define PITCHANGLECORRECTION_OPTICAL_FLOW_H
 
-namespace openMVG {
-    namespace features {
-        class Eemployee
-        {
+namespace pitchAngleCorrection {
+    namespace optical_flow {
+        class OpticalFlow {
+        private:
         public:
-            std::string name;       //!< 氏名
-            std::string address;    //!< 住所
+
+
         };
 
     }
