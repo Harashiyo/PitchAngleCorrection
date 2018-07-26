@@ -1,7 +1,3 @@
-//
-// Created by Haraoka Shohei on 2018/07/26.
-//
-
 #ifndef PITCHANGLECORRECTION_IMAGE_IO_H
 #define PITCHANGLECORRECTION_IMAGE_IO_H
 

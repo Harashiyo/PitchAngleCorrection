@@ -1,7 +1,3 @@
-//
-// Created by Haraoka Shohei on 2018/07/26.
-//
-
 #include "image_io.hpp"
 
 namespace pitchanglecorrection {
@@ -9,13 +5,13 @@ namespace image {
 
 void SearchDir(std::string path, std::vector<std::string> &output) {
     int i, dirElements;
-    std::string search_path;
+    std::string searchPath;
 
-    struct stat stat_buf;
-    struct dirent **namelist = NULL;
+    struct stat statBuf;
+    struct dirent **nameList = NULL;
 
     // dirElements にはディレクトリ内の要素数が入る
-    dirElements = scandir(path.c_str(), &namelist, NULL, NULL);
+    dirElements = scandir(path.c_str(), &nameList, NULL, NULL);
 
     if (dirElements == -1) {
         std::cout << "ERROR" << std::endl;
@@ -25,23 +21,23 @@ void SearchDir(std::string path, std::vector<std::string> &output) {
         for (i = 0; i < dirElements; i += 1) {
 
             // "." と ".." を除く
-            if ((strcmp(namelist[i]->d_name, ".\0") != 0) && (strcmp(namelist[i]->d_name, "..\0") != 0)) {
+            if ((strcmp(nameList[i]->d_name, ".\0") != 0) && (strcmp(nameList[i]->d_name, "..\0") != 0)) {
 
                 //search_pathには検索対象のフルパスを格納する
-                search_path = path + std::string(namelist[i]->d_name);
+                searchPath = path + std::string(nameList[i]->d_name);
 
                 // ファイル情報の取得の成功
-                if (stat(search_path.c_str(), &stat_buf) == 0) {
+                if (stat(searchPath.c_str(), &statBuf) == 0) {
 
                     // ディレクトリだった場合の処理
-                    if ((stat_buf.st_mode & S_IFMT) == S_IFDIR) {
+                    if ((statBuf.st_mode & S_IFMT) == S_IFDIR) {
                         // 再帰によりディレクトリ内を探索
-                        SearchDir(path + std::string(namelist[i]->d_name) + "/", output);
+                        SearchDir(path + std::string(nameList[i]->d_name) + "/", output);
                     }
 
                         //ファイルだった場合の処理
                     else {
-                        output.push_back(search_path);
+                        output.push_back(searchPath);
                     }
                 }
 
@@ -53,9 +49,7 @@ void SearchDir(std::string path, std::vector<std::string> &output) {
         }
     }
     std::sort(output.begin(), output.end());
-
-    free(namelist);
-    return;
+    free(nameList);
 }
 
 }
