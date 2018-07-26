@@ -2,7 +2,7 @@
 // Created by Haraoka Shohei on 2018/07/25.
 //
 
-#include "feature_detection.h"
+#include "feature_detection.hpp"
 
 namespace pitchanglecorrection {
 namespace opticalflow {

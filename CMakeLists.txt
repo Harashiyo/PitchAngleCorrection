@@ -3,7 +3,7 @@ project(PitchAngleCorrection)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(PitchAngleCorrection src/main.cpp "src/optical_flow/feature_detection.cpp" "src/optical_flow/feature_detection.h" src/optical_flow/optical_flow.cpp src/optical_flow/optical_flow.h src/image/image_io.cpp src/image/image_io.h)
+add_executable(PitchAngleCorrection src/main.cpp "src/optical_flow/feature_detection.cpp" "src/optical_flow/feature_detection.hpp" src/optical_flow/optical_flow.cpp src/optical_flow/optical_flow.hpp src/image/image_io.cpp src/image/image_io.hpp)
 
 find_package(OpenCV 3.4 REQUIRED)
 include_directories( ${OpenCV_INCLUDE_DIRS} )

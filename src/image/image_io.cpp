@@ -2,7 +2,7 @@
 // Created by Haraoka Shohei on 2018/07/26.
 //
 
-#include "image_io.h"
+#include "image_io.hpp"
 
 namespace pitchanglecorrection {
 namespace image {

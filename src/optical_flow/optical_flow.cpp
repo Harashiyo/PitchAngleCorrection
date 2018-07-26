@@ -2,7 +2,7 @@
 // Created by Haraoka Shohei on 2018/07/25.
 //
 
-#include "optical_flow.h"
+#include "optical_flow.hpp"
 
 namespace pitchanglecorrection {
 namespace opticalflow {
