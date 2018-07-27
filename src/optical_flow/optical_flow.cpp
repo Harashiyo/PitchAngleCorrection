@@ -5,33 +5,55 @@ namespace opticalflow {
 
 OpticalFlow::OpticalFlow(cv::Mat &image) {
     if (image.channels() == 1) {
-        currFrameGray_ = image.clone();
+        prevFrameGray_ = image.clone();
     } else {
-        cv::cvtColor(image, currFrameGray_, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(image, prevFrameGray_, cv::COLOR_BGR2GRAY);
     }
-    DetectFeatures(currFrameGray_, currFeatures_);
+    DetectFeatures(prevFrameGray_, prevFeatures_);
 }
 
 void OpticalFlow::CalcOpticalFlow(cv::Mat &image, std::vector<std::vector<cv::Point2f>> &output) {
-    prevFrameGray_ = currFrameGray_.clone();
-    prevFeatures_.clear();
-    std::copy(currFeatures_.begin(), currFeatures_.end(), std::back_inserter(prevFeatures_));
+    cv::Mat currFrameGray;
     if (image.channels() == 1) {
-        currFrameGray_ = image.clone();
+        currFrameGray = image.clone();
     } else {
-        cv::cvtColor(image, currFrameGray_, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(image, currFrameGray, cv::COLOR_BGR2GRAY);
     }
-    currFeatures_.clear();
-    DetectFeatures(currFrameGray_, currFeatures_);
+
+    std::vector<cv::Point2f> nextPts;
     std::vector<uchar> featuresFound;
     std::vector<float> featuresErrors;
+    const cv::Size kWinSize = cv::Size(21, 21);
+    const int kMaxLevel = 3;
+    const cv::TermCriteria kCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
+    const int kFlags = 0;
+    const double kMinEigThreshold = 1e-4;
+    // Parameters:
+    //      prevImg	            first 8-bit input image or pyramid constructed by buildOpticalFlowPyramid.
+    //      nextImg	            second input image or pyramid of the same size and the same type as prevImg.
+    //      prevPts	            vector of 2D points for which the flow needs to be found; point coordinates must be single-precision floating-point numbers.
+    //      nextPts	            output vector of 2D points (with single-precision floating-point coordinates) containing the calculated new positions of input features in the second image; when OPTFLOW_USE_INITIAL_FLOW flag is passed, the vector must have the same size as in the input.
+    //      status	            output status vector (of unsigned chars); each element of the vector is set to 1 if the flow for the corresponding features has been found, otherwise, it is set to 0.
+    //      err	                output vector of errors; each element of the vector is set to an error for the corresponding feature, type of the error measure can be set in flags parameter; if the flow wasn't found then the error is not defined (use the status parameter to find such cases).
+    //      winSize	            size of the search window at each pyramid level.
+    //      maxLevel	        0-based maximal pyramid level number; if set to 0, pyramids are not used (single level), if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm will use as many levels as pyramids have but no more than maxLevel.
+    //      criteria	        parameter, specifying the termination criteria of the iterative search algorithm (after the specified maximum number of iterations criteria.maxCount or when the search window moves by less than criteria.epsilon.
+    //      flags	            operation flags:
+    //                              OPTFLOW_USE_INITIAL_FLOW uses initial estimations, stored in nextPts; if the flag is not set, then prevPts is copied to nextPts and is considered the initial estimate.
+    //                              OPTFLOW_LK_GET_MIN_EIGENVALS use minimum eigen values as an error measure (see minEigThreshold description); if the flag is not set, then L1 distance between patches around the original and a moved point, divided by number of pixels in a window, is used as a error measure.
+    //      minEigThreshold     the algorithm calculates the minimum eigen value of a 2x2 normal matrix of optical flow equations (this matrix is called a spatial gradient matrix in [20]), divided by number of pixels in a window; if this value is less than minEigThreshold, then a corresponding feature is filtered out and its flow is not processed, so it allows to remove bad points and get a performance boost.
     cv::calcOpticalFlowPyrLK(
             prevFrameGray_,
-            currFrameGray_,
+            currFrameGray,
             prevFeatures_,
-            currFeatures_,
+            nextPts,
             featuresFound,
-            featuresErrors);
+            featuresErrors,
+            kWinSize,
+            kMaxLevel,
+            kCriteria,
+            kFlags,
+            kMinEigThreshold);
     result_.clear();
     for (int i = 0; i < featuresFound.size(); i++) {
         if (!featuresFound[i]) {
@@ -39,10 +61,14 @@ void OpticalFlow::CalcOpticalFlow(cv::Mat &image, std::vector<std::vector<cv::Po
         }
         std::vector<cv::Point2f> pair;
         pair.push_back(prevFeatures_[i]);
-        pair.push_back(currFeatures_[i]);
+        pair.push_back(nextPts[i]);
         result_.push_back(pair);
     }
     output = result_;
+
+    prevFrameGray_ = currFrameGray.clone();
+    prevFeatures_.clear();
+    DetectFeatures(currFrameGray, prevFeatures_);
 }
 
 void OpticalFlow::DrawOpticalFlow(cv::Mat &image, LineType l, cv::Mat &output) {
@@ -51,7 +77,7 @@ void OpticalFlow::DrawOpticalFlow(cv::Mat &image, LineType l, cv::Mat &output) {
         for (int i = 0; i < result_.size(); i++) {
             cv::Point p1 = cv::Point((int) result_[i][0].x, (int) result_[i][0].y);
             cv::Point p2 = cv::Point((int) result_[i][1].x, (int) result_[i][1].y);
-            line(output, p1, p2, cv::Scalar(0, 0, 255), 12);
+            line(output, p1, p2, cv::Scalar(0, 0, 255), 6);
         }
     } else if (l == STRAIGHT_LINE) {
         for (int i = 0; i < result_.size(); i++) {
@@ -88,12 +114,12 @@ void OpticalFlow::DrawOpticalFlow(cv::Mat &image, LineType l, cv::Mat &output) {
 
 void OpticalFlow::PrintFeatures(cv::Mat &image, cv::Mat &output) {
     output = image.clone();
-    const int r = 4;
-    for (int i = 0; i < prevFeatures_.size(); i++) {
-        cv::circle(output, prevFeatures_[i], r, cv::Scalar(255, 0, 255), -1, 24, 0);
-    }
-    for (int i = 0; i < currFeatures_.size(); i++) {
-        cv::circle(output, currFeatures_[i], r, cv::Scalar(0, 255, 255), -1, 24, 0);
+    const int kRadius = 4;
+    const cv::Scalar kPrevFeaturesColor(255, 0, 255);
+    const cv::Scalar kCurrFeaturesColor(0, 255, 255);
+    for (int i = 0; i < result_.size(); i++) {
+        cv::circle(output, result_[i][0], kRadius, kPrevFeaturesColor, -1, cv::LINE_8, 0);
+        cv::circle(output, result_[i][1], kRadius, kCurrFeaturesColor, -1, cv::LINE_8, 0);
     }
 }
 
