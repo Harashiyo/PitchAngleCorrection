@@ -33,8 +33,8 @@ int main(int argc, char *argv[]) {
         std::vector< std::vector<cv::Point2f>> features;
         driveRecorder.CalcOpticalFlow(frame,features);
         Mat result;
-        driveRecorder.DrawOpticalFlow(frame,OpticalFlow::STRAIGHT_LINE,result);
-
+        driveRecorder.DrawOpticalFlow(frame,OpticalFlow::LINE_SEGMENT,result);
+        //driveRecorder.PrintFeatures(frame,result);
         cvNamedWindow("Display Image", CV_WINDOW_AUTOSIZE);
         imshow("Display Image", result);
         cvWaitKey(0);
