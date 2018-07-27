@@ -11,9 +11,7 @@ namespace opticalflow {
 class OpticalFlow {
 private:
     cv::Mat prevFrameGray_;
-    cv::Mat currFrameGray_;
     std::vector<cv::Point2f> prevFeatures_;
-    std::vector<cv::Point2f> currFeatures_;
     std::vector< std::vector<cv::Point2f>> result_;
 
 public:
@@ -26,8 +24,6 @@ public:
     void DrawOpticalFlow(cv::Mat &image, LineType l, cv::Mat &output);
     void PrintFeatures(cv::Mat &image,cv::Mat &output);
 };
-
-
 
 }
 }
