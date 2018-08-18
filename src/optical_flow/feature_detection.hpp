@@ -3,12 +3,11 @@
 
 #include <opencv2/opencv.hpp>
 
-namespace pitchanglecorrection {
-namespace opticalflow {
+namespace pac {
 
-void DetectFeatures(cv::Mat &grayImage, std::vector<cv::Point2f> &output);
+void DetectFeatures(const cv::Mat &grayImage, std::vector<cv::Point2f> &_features);
 
-}
-}
+
+} // namespace pac
 
 #endif //PITCHANGLECORRECTION_FEATURES_DETECTION_H
