@@ -1,44 +1,44 @@
 #include "image/image_io.hpp"
 #include "optical_flow/optical_flow.hpp"
+#include "geometry/motion_estimation.hpp"
+#include "geometry/geometry.hpp"
 #include <iostream>
 #include <opencv2/opencv.hpp>
 
 using namespace cv;
 using namespace std;
-using namespace pitchanglecorrection::opticalflow;
-using namespace pitchanglecorrection::image;
+using namespace pac;
 
 int main(int argc, char *argv[]) {
-    if(argc < 1){
+    if (argc < 1) {
         cout << "usage: ./a.out [images directory path]" << endl;
     }
+    vector<string> files;
+    SearchDir(argv[1], files);
 
-    vector<string> fileList;
-    SearchDir(argv[1], fileList);
-    Mat frame = imread(fileList[0], 1);
-    if (!frame.data) {
-        cout << "No image data" << endl;
-        return -1;
+    const int interval = 6;
+
+    deque<Mat> frames;
+    for (int i = 0; i < interval; i++) {
+        frames.push_back(readColorImage(files[i]));
     }
-
-    OpticalFlow driveRecorder(frame);
-
-    for (int i = 1; i < fileList.size(); i++) {
-
-        frame = imread(fileList[i], 1);
-        if (!frame.data) {
-            cout << "No image data" << endl;
-            return -1;
-        }
-        std::vector< std::vector<cv::Point2f>> features;
-        driveRecorder.CalcOpticalFlow(frame,features);
-        Mat result;
-        driveRecorder.DrawOpticalFlow(frame,OpticalFlow::LINE_SEGMENT,result);
-        //driveRecorder.PrintFeatures(frame,result);
-        cvNamedWindow("Display Image", CV_WINDOW_AUTOSIZE);
-        imshow("Display Image", result);
-        cvWaitKey(0);
-
+    for (int i = interval; i < files.size(); i++) {
+        std::vector<cv::Point2f> prevFeatures;
+        std::vector<cv::Point2f> currFeatures;
+        CalcOpticalFlowMultFrames(frames, prevFeatures, currFeatures);
+        cv::Mat result = frames.back().clone();
+        //DrawOpticalFlow(frames.back(),prevFeatures,currFeatures,STRAIGHT_LINE,result);
+        //Point2f eof;
+        //CalcFocusOfExpansion(frames.back(),prevFeatures,currFeatures,eof);
+        //circle(result,eof,8,Scalar(255,0,0),6);
+        std::vector<cv::Point2f> maskedPrevFeatures;
+        std::vector<cv::Point2f> maskedCurrFeatures;
+        double pitch;
+        EstimateMotion(prevFeatures, currFeatures,maskedPrevFeatures,maskedCurrFeatures,pitch);
+        DrawOpticalFlow(frames.back(),maskedPrevFeatures,maskedCurrFeatures,STRAIGHT_LINE,result);
+        showImage(result);
+        frames.pop_front();
+        frames.push_back(readColorImage(files[i]));
     }
     return 0;
 }
