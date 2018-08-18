@@ -1,33 +1,31 @@
 #include "optical_flow.hpp"
 
-namespace pitchanglecorrection {
-namespace opticalflow {
+namespace pac {
 
-OpticalFlow::OpticalFlow(cv::Mat &image) {
-    if (image.channels() == 1) {
-        prevFrameGray_ = image.clone();
+const float kMinFlowLength = 1;
+const float kMaxFlowLength = 35;
+
+void CalcOpticalFlow(const cv::Mat &prevImage, const cv::Mat &currImage,
+                     const std::vector<cv::Point2f> &prevFeatures, std::vector<cv::Point2f> &_currFeatures,
+                     std::vector<uchar> &_featuresFound) {
+    cv::Mat prevImageGray;
+    if (prevImage.channels() == 1) {
+        prevImageGray = prevImage.clone();
     } else {
-        cv::cvtColor(image, prevFrameGray_, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(prevImage, prevImageGray, cv::COLOR_BGR2GRAY);
     }
-    DetectFeatures(prevFrameGray_, prevFeatures_);
-}
-
-void OpticalFlow::CalcOpticalFlow(cv::Mat &image, std::vector<std::vector<cv::Point2f>> &output) {
-    cv::Mat currFrameGray;
-    if (image.channels() == 1) {
-        currFrameGray = image.clone();
+    cv::Mat currImageGray;
+    if (currImage.channels() == 1) {
+        currImageGray = currImage.clone();
     } else {
-        cv::cvtColor(image, currFrameGray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(currImage, currImageGray, cv::COLOR_BGR2GRAY);
     }
-
-    std::vector<cv::Point2f> nextPts;
-    std::vector<uchar> featuresFound;
     std::vector<float> featuresErrors;
-    const cv::Size kWinSize = cv::Size(21, 21);
-    const int kMaxLevel = 3;
-    const cv::TermCriteria kCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
-    const int kFlags = 0;
-    const double kMinEigThreshold = 1e-4;
+    const cv::Size winSize = cv::Size(21, 21);
+    const int maxLevel = 3;
+    const cv::TermCriteria criteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
+    const int flags = 0;
+    const double minEigThreshold = 1e-4;
     // Parameters:
     //      prevImg	            first 8-bit input image or pyramid constructed by buildOpticalFlowPyramid.
     //      nextImg	            second input image or pyramid of the same size and the same type as prevImg.
@@ -43,85 +41,250 @@ void OpticalFlow::CalcOpticalFlow(cv::Mat &image, std::vector<std::vector<cv::Po
     //                              OPTFLOW_LK_GET_MIN_EIGENVALS use minimum eigen values as an error measure (see minEigThreshold description); if the flag is not set, then L1 distance between patches around the original and a moved point, divided by number of pixels in a window, is used as a error measure.
     //      minEigThreshold     the algorithm calculates the minimum eigen value of a 2x2 normal matrix of optical flow equations (this matrix is called a spatial gradient matrix in [20]), divided by number of pixels in a window; if this value is less than minEigThreshold, then a corresponding feature is filtered out and its flow is not processed, so it allows to remove bad points and get a performance boost.
     cv::calcOpticalFlowPyrLK(
-            prevFrameGray_,
-            currFrameGray,
-            prevFeatures_,
-            nextPts,
-            featuresFound,
+            prevImageGray,
+            currImageGray,
+            prevFeatures,
+            _currFeatures,
+            _featuresFound,
             featuresErrors,
-            kWinSize,
-            kMaxLevel,
-            kCriteria,
-            kFlags,
-            kMinEigThreshold);
-    result_.clear();
+            winSize,
+            maxLevel,
+            criteria,
+            flags,
+            minEigThreshold);
+}
+
+void
+CalcOpticalFlowTwoFrames(const cv::Mat &prevImage, const cv::Mat &currImage, std::vector<cv::Point2f> &_prevFeatures,
+                         std::vector<cv::Point2f> &_currFeatures) {
+    std::vector<cv::Point2f> prevFeatures;
+    DetectFeatures(prevImage, prevFeatures);
+    std::vector<cv::Point2f> currFeatures;
+    std::vector<uchar> featuresFound;
+    CalcOpticalFlow(prevImage, currImage, prevFeatures, currFeatures, featuresFound);
+
+    std::vector<cv::Point2f> prevFeaturesFound;
+    std::vector<cv::Point2f> currFeaturesFound;
     for (int i = 0; i < featuresFound.size(); i++) {
         if (!featuresFound[i]) {
             continue;
         }
-        std::vector<cv::Point2f> pair;
-        pair.push_back(prevFeatures_[i]);
-        pair.push_back(nextPts[i]);
-        result_.push_back(pair);
-    }
-    output = result_;
-
-    prevFrameGray_ = currFrameGray.clone();
-    prevFeatures_.clear();
-    DetectFeatures(currFrameGray, prevFeatures_);
-}
-
-void OpticalFlow::DrawOpticalFlow(cv::Mat &image, LineType l, cv::Mat &output) {
-    output = image.clone();
-    if (l == LINE_SEGMENT) {
-        for (int i = 0; i < result_.size(); i++) {
-            cv::Point p1 = cv::Point((int) result_[i][0].x, (int) result_[i][0].y);
-            cv::Point p2 = cv::Point((int) result_[i][1].x, (int) result_[i][1].y);
-            line(output, p1, p2, cv::Scalar(0, 0, 255), 6);
+        if (cv::norm(prevFeatures[i] - currFeatures[i]) > kMaxFlowLength) {
+            featuresFound[i] = 0;
+            continue;
         }
-    } else if (l == STRAIGHT_LINE) {
-        for (int i = 0; i < result_.size(); i++) {
-            float slope = (result_[i][1].y - result_[i][0].y) / (result_[i][1].x - result_[i][0].x);
-            float intercept = result_[i][0].y - slope * result_[i][0].x;
-            float y1, y2, x1, x2;
+        if (cv::norm(prevFeatures[i] - currFeatures[i]) < kMinFlowLength) {
+            featuresFound[i] = 0;
+            continue;
+        }
+        prevFeaturesFound.push_back(prevFeatures[i]);
+        currFeaturesFound.push_back(currFeatures[i]);
+    }
+    _prevFeatures = prevFeaturesFound;
+    _currFeatures = currFeaturesFound;
+    return;
+}
 
-            if (intercept < 0) {
-                y1 = 0;
-                x1 = -intercept / slope;
-            } else if (intercept >= output.rows) {
-                y1 = output.rows - 1;
-                x1 = (y1 - intercept) / slope;
-            } else {
-                y1 = intercept;
-                x1 = 0;
+void CalcOpticalFlowMultFrames(const std::deque<cv::Mat> &images, std::vector<cv::Point2f> &_prevFeaturesFound,
+                               std::vector<cv::Point2f> &_currFeaturesFound) {
+    if (images.size() < 2) {
+        fprintf(stderr, "error: more than 2 images are required\n");
+        exit(1);
+    }
+    std::vector<cv::Point2f> initialFeatures;
+    DetectFeatures(images.front(), initialFeatures);
+    const int size = initialFeatures.size();
+    uchar initialFlags[size];
+    for (int i = 0; i < size; i++) {
+        initialFlags[i] = 1;
+    }
+    std::vector<cv::Point2f> prevFeatures;
+    std::copy(initialFeatures.begin(), initialFeatures.end(), std::back_inserter(prevFeatures));
+    std::vector<cv::Point2f> currFeatures;
+    std::vector<uchar> foundFlags;
+    for (int i = 0; i < images.size() - 1; i++) {
+        CalcOpticalFlow(images[i], images[i + 1], prevFeatures, currFeatures, foundFlags);
+        std::vector<cv::Point2f> currFeaturesFound;
+        int k = 0;
+        for (int j = 0; j < size; j++) {
+            if (initialFlags[j]) {
+                if (foundFlags[k] && cv::norm(prevFeatures[k] - currFeatures[k]) <= kMaxFlowLength &&
+                    cv::norm(prevFeatures[k] - currFeatures[k]) >= kMinFlowLength) {
+                    currFeaturesFound.push_back(currFeatures[k]);
+                } else {
+                    initialFlags[j] = 0;
+                }
+                k++;
             }
-            y2 = slope * (output.cols - 1) + intercept;
-            if (y2 < 0) {
-                y2 = 0;
-                x2 = -intercept / slope;
-            } else if (y2 >= output.rows) {
-                y2 = output.rows - 1;
-                x2 = (y2 - intercept) / slope;
-            } else {
-                x2 = output.cols - 1;
-            }
-            cv::Point p1 = cv::Point((int) x1, (int) y1);
-            cv::Point p2 = cv::Point((int) x2, (int) y2);
-            cv::line(output, p1, p2, cv::Scalar(0, 0, 255), 4);
+        }
+        prevFeatures = currFeaturesFound;
+    }
+    std::vector<cv::Point2f> prevFeaturesFound;
+    for (int i = 0; i < size; i++) {
+        if (initialFlags[i]) {
+            prevFeaturesFound.push_back(initialFeatures[i]);
         }
     }
+    _prevFeaturesFound = prevFeaturesFound;
+    _currFeaturesFound = prevFeatures;
 }
 
-void OpticalFlow::PrintFeatures(cv::Mat &image, cv::Mat &output) {
-    output = image.clone();
-    const int kRadius = 4;
-    const cv::Scalar kPrevFeaturesColor(255, 0, 255);
-    const cv::Scalar kCurrFeaturesColor(0, 255, 255);
-    for (int i = 0; i < result_.size(); i++) {
-        cv::circle(output, result_[i][0], kRadius, kPrevFeaturesColor, -1, cv::LINE_8, 0);
-        cv::circle(output, result_[i][1], kRadius, kCurrFeaturesColor, -1, cv::LINE_8, 0);
+void DrawOpticalFlow(const cv::Mat &image, const std::vector<cv::Point2f> &prevFeatures,
+                     const std::vector<cv::Point2f> &currFeatures, LineType l, cv::Mat &_result, int thickness,
+                     const cv::Scalar &color) {
+    _result = image.clone();
+    switch (l) {
+        case LINE_SEGMENT:
+            for (int i = 0; i < prevFeatures.size(); i++) {
+                cv::line(_result, prevFeatures[i], currFeatures[i], color, thickness);
+            }
+            break;
+        case STRAIGHT_LINE:
+            // 直線 : ax+by+c=0
+            std::vector<cv::Vec3f> lines;
+            CalcLines(prevFeatures,currFeatures,lines);
+            DrawLines(image, lines, _result, thickness, color);
+            break;
     }
+    return;
 }
 
+void Normalization(const cv::Mat &image, const std::vector<cv::Point2f> &prevFeatures,
+                   const std::vector<cv::Point2f> &currFeatures, std::vector<cv::Point2f> &_prevNormalized,
+                   std::vector<cv::Point2f> &_currNormalized) {
+    std::vector<cv::Point2f> prevNormalized;
+    std::vector<cv::Point2f> currNormalized;
+    float x = (float) image.cols / 2;
+    float y = (float) image.rows / 2;
+    for (int i = 0; i < prevFeatures.size(); i++) {
+        prevNormalized.push_back(cv::Point2f(prevFeatures[i].x - x, prevFeatures[i].y - y));
+        currNormalized.push_back(cv::Point2f(currFeatures[i].x - x, currFeatures[i].y - y));
+    }
+    _prevNormalized = prevNormalized;
+    _currNormalized = currNormalized;
+    return;
 }
+
+void Normalization2(const cv::Mat &image, const std::vector<cv::Point2f> &prevFeatures,
+                    const std::vector<cv::Point2f> &currFeatures, std::vector<cv::Point2f> &_prevNormalized,
+                    std::vector<cv::Point2f> &_currNormalized) {
+    std::vector<cv::Point2f> prevNormalized;
+    std::vector<cv::Point2f> currNormalized;
+    const float focalLength = 1280;
+    float t[] = {0.0, 0.0};
+    for (int i = 0; i < prevFeatures.size(); i++) {
+        prevNormalized.push_back(cv::Point2f(prevFeatures[i].x / focalLength, prevFeatures[i].y / focalLength));
+        currNormalized.push_back(cv::Point2f(currFeatures[i].x / focalLength, currFeatures[i].y / focalLength));
+        t[0] += prevNormalized[i].x + currNormalized[i].x;
+        t[1] += prevNormalized[i].y + currNormalized[i].y;
+    }
+    t[0] /= prevFeatures.size() * 2;
+    t[1] /= prevFeatures.size() * 2;
+    std::vector<float> dist;
+    for (int i = 0; i < prevFeatures.size(); i++) {
+        prevNormalized[i].x = prevFeatures[i].x - t[0];
+        prevNormalized[i].y = prevFeatures[i].y - t[1];
+        currNormalized[i].x = currFeatures[i].x - t[0];
+        currNormalized[i].y = currFeatures[i].y - t[1];
+        dist.push_back(std::sqrt(std::pow(prevNormalized[i].x, 2) + std::pow(prevNormalized[i].y, 2)));
+        dist.push_back(std::sqrt(std::pow(currNormalized[i].x, 2) + std::pow(currNormalized[i].y, 2)));
+    }
+    float meanDist = 0.0;
+    for (float d:dist) {
+        meanDist += d;
+    }
+    meanDist /= dist.size();
+    float scale = (float) M_SQRT2 / meanDist;
+    for (int i = 0; i < prevFeatures.size(); i++) {
+        prevNormalized[i].x = prevFeatures[i].x * scale - scale * t[0] * focalLength;
+        prevNormalized[i].y = prevFeatures[i].y * scale - scale * t[1] * focalLength;
+        currNormalized[i].x = currFeatures[i].x * scale - scale * t[0] * focalLength;
+        currNormalized[i].y = currFeatures[i].y * scale - scale * t[1] * focalLength;
+    }
+    _prevNormalized = prevNormalized;
+    _currNormalized = currNormalized;
+    return;
 }
+
+
+void LineFilter(const std::vector<cv::Vec3f> &lines, const cv::Point2f &upperLeft, const cv::Point2f &bottomRight,
+                std::vector<cv::Vec3f> &_result) {
+    std::vector<cv::Vec3f> result;
+    for (cv::Vec3f l :lines) {
+        if (l[1]) {
+            float left = SolveY(l, upperLeft.x);
+            if (left >= upperLeft.y && left < bottomRight.y) {
+                result.push_back(l);
+                continue;
+            }
+            float right = SolveY(l, bottomRight.x);
+            if (right >= upperLeft.y && right < bottomRight.y) {
+                result.push_back(l);
+                continue;
+            }
+        }
+        if (l[0]) {
+            float top = SolveX(l, upperLeft.y);
+            if (top >= upperLeft.x && top < bottomRight.x) {
+                result.push_back(l);
+                continue;
+            }
+            float bottom = SolveX(l, bottomRight.y);
+            if (bottom >= upperLeft.x && bottom < bottomRight.x) {
+                result.push_back(l);
+            }
+        }
+    }
+    _result = result;
+    return;
+}
+
+void CalcFocusOfExpansion(const cv::Mat &image, const std::vector<cv::Point2f> &prevFeatures,
+                          const std::vector<cv::Point2f> &currFeatures, cv::Point2f &_eof) {
+    std::vector<cv::Vec3f> lines;
+    CalcLines(prevFeatures,currFeatures,lines);
+    float x = (float) image.cols / 5;
+    float y = (float) image.rows / 3;
+    float xx = x / 9;
+    float yy = y / 9;
+    float min[3] = {1000000, 0, 0};
+    std::vector<cv::Vec3f> linesFiltrated;
+    LineFilter(lines, cv::Point2f(x * 2, y), cv::Point2f(x * 3, y * 2), linesFiltrated);
+
+    const int num = lines.size();
+    for (int i = 0; i < 10; i++) {
+        for (int j = 0; j < 10; j++) {
+            float sum = 0.0;
+            for (cv::Vec3f l:lines) {
+                sum += std::sqrt(CalcDistance(l, cv::Point2f(x * 2 + xx * i, y + yy * j)));
+            }
+            sum /= num;
+            if (min[0] > sum) {
+                min[0] = sum;
+                min[1] = x * 2 + xx * i;
+                min[2] = y + yy * j;
+            }
+
+        }
+    }
+    x = min[1];
+    y = min[2];
+    for (int i = 0; i < 10; i++) {
+        for (int j = 0; j < 10; j++) {
+            float sum = 0.0;
+            for (cv::Vec3f l:lines) {
+                sum += std::sqrt(CalcDistance(l, cv::Point2f(x + i - 5, y + j - 5)));
+            }
+            sum /= num;
+            if (min[0] > sum) {
+                min[0] = sum;
+                min[1] = x + i - 5;
+                min[2] = y + j - 5;
+            }
+        }
+    }
+    _eof = cv::Point2f(min[1], min[2]);
+    return;
+}
+
+} // namespace pac

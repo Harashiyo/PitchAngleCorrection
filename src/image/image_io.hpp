@@ -5,14 +5,19 @@
 #include <vector>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <opencv2/opencv.hpp>
 
 
-namespace pitchanglecorrection {
-namespace image {
+namespace pac {
 
-void SearchDir(std::string path, std::vector<std::string> &output);
+void SearchDir(std::string DirPath, std::vector<std::string> &_filePaths);
 
-}
-}
+cv::Mat readColorImage(const std::string &filePath);
+
+cv::Mat readGrayImage(const std::string &filePath);
+
+void showImage(const cv::Mat &image);
+
+} // namespace pac
 
 #endif //PITCHANGLECORRECTION_IMAGE_IO_H
